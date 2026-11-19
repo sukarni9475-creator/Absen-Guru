@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rekap Kehadiran Guru Online</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; background: #f4f6f9; margin: 0; padding: 20px; color: #333; }
+    .container { max-width: 900px; margin: auto; }
+    .card { background: #fff; padding: 22px; border-radius: 10px; box-shadow: 0 2px 8px rgba(0,0,0,0.07); margin-bottom: 20px; }
+    h2 { margin-top: 0; color: #1e293b; font-size: 20px; }
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+    input, select, button { padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; }
+    button { background: #2563eb; color: #fff; border: none; cursor: pointer; font-weight: 600; transition: background 0.2s; }
+    button:hover { background: #1d4ed8; }
+    button:disabled { background: #94a3b8; cursor: not-allowed; }
+    button.btn-export { background: #16a34a; }
+    button.btn-export:hover { background: #15803d; }
+    table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 14px; }
+    th, td { border-bottom: 1px solid #e2e8f0; padding: 11px 10px; text-align: left; }
+    th { background: #f8fafc; color: #475569; font-weight: 600; }
+    .badge { padding: 4px 9px; border-radius: 5px; font-size: 12px; font-weight: bold; display: inline-block; }
+    .hadir { background: #dcfce7; color: #166534; }
+    .izin { background: #fef9c3; color: #854d0e; }
+    .sakit { background: #fee2e2; color: #991b1b; }
+    .header-flex { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; }
+    .toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
+    .notice { background: #eff6ff; border-left: 4px solid #2563eb; padding: 12px 15px; border-radius: 6px; font-size: 13px; color: #1e3a8a; margin-bottom: 20px; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="notice">
+    <strong>Catatan Pengaturan:</strong> Buka file ini dengan Notepad / VS Code, lalu ganti teks <code>PASTE_URL_WEB_APP_ANDA_DI_SINI</code> dengan URL Web App dari Google Apps Script Anda agar data tersimpan ke Google Sheets.
+  </div>
+
+  <!-- Form Input Kehadiran -->
+  <div class="card">
+    <h2>Catat Kehadiran Guru di Kelas Online</h2>
+    <form id="absenForm" class="form-grid">
+      <input type="text" id="nama" placeholder="Nama Lengkap Guru" required>
+      <input type="text" id="kelas" placeholder="Kelas (mis. X IPA 1)" required>
+      <input type="text" id="mapel" placeholder="Mata Pelajaran" required>
+      <select id="status">
+        <option value="Hadir">Hadir</option>
+        <option value="Izin">Izin / Tugas Luar</option>
+        <option value="Sakit">Sakit</option>
+      </select>
+      <input type="text" id="keterangan" placeholder="Link Meet/Zoom atau Catatan">
+      <button type="submit" id="btnSubmit">Kirim Kehadiran</button>
+    </form>
+  </div>
+
+  <!-- Tabel Rekapitulasi -->
+  <div class="card">
+    <div class="header-flex">
+      <h2>Rekapitulasi Kehadiran</h2>
+      <div class="toolbar">
+        <input type="text" id="filterNama" placeholder="Cari nama, kelas, mapel..." onkeyup="filterTabel()">
+        <button class="btn-export" onclick="exportCSV()">Unduh CSV</button>
+      </div>
+    </div>
+    <div style="overflow-x:auto;">
+      <table id="rekapTable">
+        <thead>
+          <tr>
+            <th>Waktu</th>
+            <th>Nama Guru</th>
+            <th>Kelas</th>
+            <th>Mata Pelajaran</th>
+            <th>Status</th>
+            <th>Keterangan</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody">
+          <tr><td colspan="6">Memuat data...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  const SCRIPT_URL = 'PASTE_URL_WEB_APP_ANDA_DI_SINI';
+  let semuaData = [];
+
+  async function muatData() {
+    if (SCRIPT_URL === 'PASTE_URL_WEB_APP_ANDA_DI_SINI') {
+      document.getElementById('tableBody').innerHTML = '<tr><td colspan="6">Belum terhubung ke Google Sheets. Silakan isi SCRIPT_URL terlebih dahulu.</td></tr>';
+      return;
+    }
+    try {
+      const res = await fetch(SCRIPT_URL);
+      semuaData = await res.json();
+      tampilkanTabel(semuaData);
+    } catch (err) {
+      document.getElementById('tableBody').innerHTML = '<tr><td colspan="6">Gagal memuat data. Pastikan URL Google Apps Script sudah benar dan disetel ke Anyone.</td></tr>';
+    }
+  }
+
+  function tampilkanTabel(data) {
+    const tbody = document.getElementById('tableBody');
+    if (data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6">Belum ada data kehadiran.</td></tr>';
+      return;
+    }
+    tbody.innerHTML = data.map(item => {
+      let badgeClass = 'hadir';
+      if (item.status === 'Izin') badgeClass = 'izin';
+      if (item.status === 'Sakit') badgeClass = 'sakit';
+      return `
+        <tr>
+          <td>${item.timestamp}</td>
+          <td><strong>${item.nama}</strong></td>
+          <td>${item.kelas}</td>
+          <td>${item.mapel}</td>
+          <td><span class="badge ${badgeClass}">${item.status}</span></td>
+          <td>${item.keterangan}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  document.getElementById('absenForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (SCRIPT_URL === 'PASTE_URL_WEB_APP_ANDA_DI_SINI') {
+      alert('Silakan isi SCRIPT_URL dengan URL Web App Google Apps Script Anda terlebih dahulu.');
+      return;
+    }
+    const btn = document.getElementById('btnSubmit');
+    btn.disabled = true;
+    btn.textContent = 'Menyimpan...';
+
+    const payload = {
+      nama: document.getElementById('nama').value,
+      kelas: document.getElementById('kelas').value,
+      mapel: document.getElementById('mapel').value,
+      status: document.getElementById('status').value,
+      keterangan: document.getElementById('keterangan').value
+    };
+
+    try {
+      await fetch(SCRIPT_URL, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      document.getElementById('absenForm').reset();
+      alert('Kehadiran berhasil dicatat!');
+      muatData();
+    } catch (err) {
+      alert('Terjadi kesalahan saat menyimpan data.');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Kirim Kehadiran';
+    }
+  });
+
+  function filterTabel() {
+    const kata = document.getElementById('filterNama').value.toLowerCase();
+    const hasil = semuaData.filter(d => 
+      (d.nama && d.nama.toLowerCase().includes(kata)) || 
+      (d.kelas && d.kelas.toLowerCase().includes(kata)) ||
+      (d.mapel && d.mapel.toLowerCase().includes(kata))
+    );
+    tampilkanTabel(hasil);
+  }
+
+  function exportCSV() {
+    if (semuaData.length === 0) {
+      alert('Tidak ada data untuk diunduh.');
+      return;
+    }
+    let csv = 'Waktu,Nama Guru,Kelas,Mata Pelajaran,Status,Keterangan\n';
+    semuaData.forEach(r => {
+      csv += `"${r.timestamp}","${r.nama}","${r.kelas}","${r.mapel}","${r.status}","${r.keterangan}"\n`;
+    });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = 'Rekap_Kehadiran_Guru.csv';
+    link.click();
+  }
+
+  muatData();
+</script>
+
+</body>
+</html>
